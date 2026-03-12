@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ECG Snake & Ladder Master</title>
+    <style>
+        /* Modern Reset & Base Styles */
+        :root {
+            --primary: #083b50;
+            --secondary: #00b4d8;
+            --accent: #ffd700;
+            --bg-gradient: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --board-size: min(90vw, 90vh, 500px);
+            --cell-size: calc(var(--board-size) / 10);
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            text-align: center;
+            background: var(--bg-gradient);
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+        }
+
+        h1 {
+            background: var(--primary);
+            color: white;
+            width: 100%;
+            padding: 1rem 0;
+            margin: 0;
+            box-shadow: var(--shadow);
+            font-size: 1.5rem;
+        }
+
+        /* Info Panel */
+        .info-panel {
+            margin: 10px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: var(--primary);
+        }
+
+        /* Board Container */
+        #game-container {
+            position: relative;
+            width: var(--board-size);
+            height: var(--board-size);
+            max-width: 98vw;
+            max-height: 70vw;
+            margin: 20px auto;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            background: white;
+            touch-action: manipulation;
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            width: 100%;
+            height: 100%;
+        }
+
+        .cell {
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            position: relative;
+            color: #555;
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+
+        .cell:nth-child(even) {
+            background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        /* Special Cell Colors (just for visual variation) */
+        .cell.start {
+            background: #e8f5e9;
+        }
+
+        .cell.end {
+            background: #ffebee;
+        }
+
+        /* SVG Overlay for Snakes/Ladders */
+        #svg-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Connectors */
+        .connector {
+            stroke-width: 5;
+            stroke-linecap: round;
+            opacity: 0.7;
+            transition: all 0.3s;
+        }
+
+        .snake-line {
+            stroke: #e74c3c;
+            stroke-dasharray: 5, 5;
+        }
+
+        .ladder-line {
+            stroke: #2ecc71;
+        }
+
+        .connector-head {
+            filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3));
+        }
+
+        /* Player */
+        #player {
+            width: 30px;
+            height: 30px;
+            background: radial-gradient(circle at 30% 30%, #ffd700, #f39c12);
+            border: 2px solid white;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: translate(10px, 10px);
+            /* Center in 50px cell */
+            transition: top 0.5s ease-in-out, left 0.5s ease-in-out;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        /* Controls */
+        #controls {
+            margin-bottom: 20px;
+        }
+
+        button.btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+        }
+
+        button.btn-primary:hover {
+            background: #0b4f6c;
+        }
+
+        button.btn-primary:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* Question Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            /* Flex when active */
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal {
+            background: white;
+            padding: 5vw 2vw;
+            border-radius: 16px;
+            width: 96vw;
+            max-width: 450px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .modal h2 {
+            margin-top: 0;
+            color: var(--primary);
+        }
+
+        .ecg-img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: none;
+            /* Shown via JS if img exists */
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .option-btn {
+            padding: 12px;
+            background: #f0f4f8;
+            border: 1px solid #d1d9e6;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .option-btn:hover {
+            background: #e1e8f0;
+            border-color: var(--secondary);
+        }
+
+        .option-btn:active {
+            background: var(--secondary);
+            color: white;
+        }
+
+        /* Timer & Tips */
+        #timer {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin: 5px 0;
+        }
+
+        #tipBox {
+            margin-top: 15px;
+            font-style: italic;
+            color: #27ae60;
+            min-height: 20px;
+        }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            :root {
+                --board-size: min(98vw, 98vh, 370px);
+                --cell-size: calc(var(--board-size) / 10);
+            }
+            #player {
+                width: 16px;
+                height: 16px;
+                transform: translate(5.5px, 5.5px);
+                font-size: 9px;
+            }
+            .cell {
+                font-size: 7px;
+            }
+            .modal {
+                padding: 3vw 1vw;
+                max-width: 98vw;
+            }
+        }
+
+        @media (max-width: 400px) {
+            :root {
+                --board-size: min(99vw, 99vh, 250px);
+                --cell-size: calc(var(--board-size) / 10);
+            }
+            .modal {
+                padding: 2vw 0.5vw;
+                max-width: 99vw;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🫀 ECG Snake & Ladder</h1>
+
+    <div class="info-panel">
+        <span id="status">Start Game</span>
+        <span id="diceShow" style="font-size: 1.5rem;">🎲 -</span>
+    </div>
+
+    <div id="game-container">
+        <div id="board"></div>
+        <!-- Player Token -->
+        <div id="player">❤️</div>
+
+        <!-- SVG Overlay -->
+        <svg id="svg-overlay">
+            <defs>
+                <!-- Marker for Ladder (Arrow up) -->
+                <marker id="arrowHead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#2ecc71" />
+                </marker>
+            </defs>
+            <!-- Lines will be injected here via JS -->
+        </svg>
+    </div>
+
+    <div id="controls">
+        <button class="btn-primary" onclick="rollDice()" id="rollBtn">Roll Dice 🎲</button>
+    </div>
+
+    <div class="modal-overlay" id="questionModal">
+        <div class="modal">
+            <div id="timer">15</div>
+            <img id="qImage" class="ecg-img" src="" alt="ECG Strip">
+            <h3 id="qText">Question goes here?</h3>
+            <div class="options-grid" id="options">
+                <!-- Buttons injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <div id="tipBox"></div>
+
+    <!-- Audio Resources -->
+
+    <audio id="correctSound">
+        <source src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg" type="audio/ogg">
+        <source src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="wrongSound">
+        <source src="https://actions.google.com/sounds/v1/cartoon/boing.ogg" type="audio/ogg">
+        <source src="https://actions.google.com/sounds/v1/cartoon/boing.mp3" type="audio/mpeg">
+    </audio>
+    <!-- WIN SOUND: Swapped to Applause as requested -->
+    <audio id="winSound">
+        <source src="https://actions.google.com/sounds/v1/crowds/applause.ogg" type="audio/ogg">
+        <source src="https://actions.google.com/sounds/v1/crowds/applause.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="slideSound">
+        <source src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.ogg" type="audio/ogg">
+        <source src="https://actions.google.com/sounds/v1/cartoon/slide_whistle.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // --- Configuration ---
+        // Snakes and Ladders Map (Start -> End)
+        // Snakes: Go DOWN (Start > End)
+        // Ladders: Go UP (Start < End)
+        const jumps = {
+            // Snakes
+            17: 7,
+            54: 34,
+            62: 19,
+            64: 60,
+            87: 24,
+            93: 73,
+            95: 75,
+            99: 78,
+            // Ladders
+            4: 14,
+            9: 31,
+            20: 38,
+            28: 84,
+            40: 59,
+            51: 67,
+            63: 81,
+            71: 91
+        };
+
+        // Questions Database
+        // Questions Database (Loaded from PDF)
+const questions = [
+
+{ 
+q: "The standard ECG recording paper speed used for routine interpretation is:",
+A: "10 mm/sec",
+B: "25 mm/sec",
+C: "50 mm/sec",
+D: "100 mm/sec",
+a: "B"
+},
+
+{ 
+q: "Identify rhythm based on description. No P waves, irregular rhythm:",
+
+A: "Sinus tachycardia",
+B: "Atrial fibrillation",
+C: "Wandering pacemaker",
+D: "Second degree block",
+a: "B"
+},
+
+{ 
+q: "Normal PR interval duration:",
+A: "0.12 – 0.20 sec",
+B: "< 0.12 sec",
+C: "> 0.20 sec",
+D: "0.08 – 0.12 sec",
+a: "A"
+},
+
+{ 
+q: "QRS complex represents:",
+A: "Atrial contraction",
+B: "Ventricular depolarisation",
+C: "Ventricular repolarisation",
+D: "Atrial relaxation",
+a: "B"
+},
+
+{ 
+q: "ST-segment elevation on ECG is most suggestive of:",
+A: "Ischemia",
+B: "Infarction (STEMI)",
+C: "Normal variant",
+D: "Hypokalemia",
+a: "B"
+},
+
+{ 
+q: "Saw toothed waves are seen in which ECG rhythm?",
+img: "eg1.jpg",
+A: "Atrial fibrillation",
+B: "Atrial flutter",
+C: "Ventricular tachycardia",
+D: "Sinus tachycardia",
+a: "B"
+},
+
+{ 
+q: "If the distance between two consecutive R waves on an ECG measures 4 large squares. What is the calculated heart rate?",
+A: "75 beats/min",
+B: "60 beats/min",
+C: "100 beats/min",
+D: "150 beats/min",
+a: "A"
+},
+
+{ 
+q: "The correct anatomical placement of chest lead V1 is:",
+A: "4th intercostal space at the right sternal border",
+B: "4th intercostal space at the left sternal border",
+C: "5th intercostal space at the midclavicular line",
+D: "5th intercostal space at the anterior axillary line",
+a: "A"
+},
+
+{ 
+q: "Which of the following is the most characteristic ECG change seen in hyperkalemia?",
+A: "Tall peaked T waves",
+B: "U waves",
+C: "ST depression",
+D: "Inverted T waves",
+a: "A"
+},
+
+{ 
+q: "Identify this lethal rhythm from the ECG strip:",
+img: "im4.jpg",
+A: "Ventricular tachycardia",
+B: "Ventricular fibrillation",
+C: "Asystole",
+D: "Torsades",
+a: "B"
+},
+
+{ 
+q: "The distance between R-R interval measures 25 small squares and rhythm is regular. What is the calculated heart rate?",
+A: "60 beats/min",
+B: "72 beats/min",
+C: "80 beats/min",
+D: "90 beats/min",
+a: "B"
+},
+
+{ 
+q: "A prolonged QT interval on ECG increases the risk of developing which life-threatening arrhythmia?",
+A: "Atrial flutter",
+B: "Torsades de Pointes",
+C: "First degree block",
+D: "Sinus bradycardia",
+a: "B"
+}
+
+];
+        
+        // Added more sample questions and image links to Wikimedia Commons (reliable public domain/CC stats)
+
+        // --- State ---
+        let position = 1;
+        let isRolling = false;
+        let currentQ = null;
+        let timerInterval = null;
+        let timeLeft = 15;
+
+        // --- Initialization ---
+        function init() {
+            createBoard();
+            drawConnectors();
+            updatePlayerPosition(1, false);
+        }
+
+        function createBoard() {
+            const board = document.getElementById('board');
+            board.innerHTML = '';
+
+            // Create 100 cells
+            // Logic: Rows 9 down to 0.
+            // Row 9 (Top): 100 -> 91 (Left to Right? No, Zigzag)
+            // Let's standardise:
+            // Row 0 (Bottom): 1-10 (L->R)
+            // Row 1: 11-20 (R->L)
+            // ...
+            // Row 9 (Top): 91-100 (R->L)
+
+            // We need to generate DIVs in CSS Grid Order (Top-Left to Bottom-Right)
+            // CSS Grid fills Row 9 (Top), then Row 8... NO, CSS grid fills Row 1, Row 2...
+            // So visual Row 1 is the 'Top' row (Logic Row 9).
+
+            for (let row = 9; row >= 0; row--) {
+                const isEveRow = (row % 2 === 0); // 0, 2, 4... are L->R
+                // If row 9 (Odd), it is R->L.
+
+                for (let col = 0; col < 10; col++) {
+                    let num;
+                    if (row % 2 === 0) {
+                        // L->R: 1..10
+                        // Row 0: 1 + col -> 1, 2...
+                        num = (row * 10) + col + 1;
+                    } else {
+                        // R->L: 20..11
+                        // Row 1: 20 - col
+                        num = (row * 10) + (10 - col);
+                    }
+
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.id = `cell-${num}`;
+                    cell.innerText = num;
+                    if (num === 1) cell.classList.add('start');
+                    if (num === 100) cell.classList.add('end');
+                    board.appendChild(cell);
+                }
+            }
+        }
+
+        // Helper: Get X,Y Coordinates relative to board container for a given numbers center
+        function getCellCenter(num) {
+            const cell = document.getElementById(`cell-${num}`);
+            if (!cell) return { x: 0, y: 0 };
+
+            const boardRect = document.getElementById('game-container').getBoundingClientRect();
+            const cellRect = cell.getBoundingClientRect();
+
+            return {
+                x: cellRect.left - boardRect.left + cellRect.width / 2,
+                y: cellRect.top - boardRect.top + cellRect.height / 2
+            };
+        }
+
+        function drawConnectors() {
+            const svg = document.getElementById('svg-overlay');
+            svg.innerHTML = ''; // Clear all
+
+            // Re-add defs if we wanted specific markers, but we are drawing custom shapes now.
+            // We can add gradients/patterns here if needed.
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+
+            // Snake Pattern/Gradient
+            const snakeGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+            snakeGradient.id = 'snakeGrad';
+            snakeGradient.innerHTML = `<stop offset="0%" stop-color="#e74c3c" /><stop offset="100%" stop-color="#c0392b" />`;
+            defs.appendChild(snakeGradient);
+
+            svg.appendChild(defs);
+
+            // Draw Jumps
+            for (const [start, end] of Object.entries(jumps)) {
+                const s = parseInt(start);
+                const e = parseInt(end);
+                const isLadder = e > s;
+
+                const startPos = getCellCenter(s); // Start of jump (Snake Head or Ladder Bottom)
+                const endPos = getCellCenter(e);   // End of jump (Snake Tail or Ladder Top)
+
+                if (isLadder) {
+                    drawLadder(svg, startPos, endPos);
+                } else {
+                    drawSnake(svg, startPos, endPos);
+                }
+            }
+        }
+
+        function drawLadder(svg, start, end) {
+            // Ladder is two parallel lines with rungs
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+
+            // Unit vector
+            const ux = dx / len;
+            const uy = dy / len;
+
+            // Perpendicular vector (rotate 90 deg)
+            const px = -uy;
+            const py = ux;
+
+            const width = 10; // Half width of ladder from center
+
+            // Side Rails
+            const rail1 = `M ${start.x + px * width} ${start.y + py * width} L ${end.x + px * width} ${end.y + py * width}`;
+            const rail2 = `M ${start.x - px * width} ${start.y - py * width} L ${end.x - px * width} ${end.y - py * width}`;
+
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            group.setAttribute('stroke', '#8e44ad'); // Wood/Purple color for ladder
+            group.setAttribute('stroke-width', '4');
+            group.setAttribute('stroke-linecap', 'round');
+
+            const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path1.setAttribute('d', rail1);
+            group.appendChild(path1);
+
+            const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path2.setAttribute('d', rail2);
+            group.appendChild(path2);
+
+            // Rungs
+            const rungCount = Math.floor(len / 20);
+            for (let i = 1; i < rungCount; i++) {
+                const t = i / rungCount;
+                const rx = start.x + dx * t;
+                const ry = start.y + dy * t;
+
+                const rung = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                rung.setAttribute('x1', rx + px * width);
+                rung.setAttribute('y1', ry + py * width);
+                rung.setAttribute('x2', rx - px * width);
+                rung.setAttribute('y2', ry - py * width);
+                rung.setAttribute('stroke-width', '2');
+                group.appendChild(rung);
+            }
+
+            svg.appendChild(group);
+        }
+
+        function drawSnake(svg, start, end) {
+            // Snake is a sine wave curve from start (head) to end (tail)
+            // But visually, snakes usually wind a bit.
+
+            // Control points for Bezier
+            const mx = (start.x + end.x) / 2;
+            const my = (start.y + end.y) / 2;
+
+            // Add some waviness perpendicular to the path
+            // Direction vector
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
+            const len = Math.sqrt(dx * dx + dy * dy);
+            const ux = dx / len;
+            const uy = dy / len;
+            const px = -uy;
+            const py = ux;
+
+            // 2 Curves for S-shape
+            const curveAmp = 30; // Amplitude of wiggle
+
+            // First control point
+            const cp1x = start.x + (dx * 0.33) + (px * curveAmp);
+            const cp1y = start.y + (dy * 0.33) + (py * curveAmp);
+
+            // Second control point
+            const cp2x = start.x + (dx * 0.66) - (px * curveAmp);
+            const cp2y = start.y + (dy * 0.66) - (py * curveAmp);
+
+            const d = `M ${start.x} ${start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${end.y}`;
+
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+            // Snake Body
+            const body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            body.setAttribute('d', d);
+            body.setAttribute('stroke', 'url(#snakeGrad)');
+            body.setAttribute('stroke-width', '8');
+            body.setAttribute('fill', 'none');
+            body.setAttribute('stroke-linecap', 'round');
+            group.appendChild(body);
+
+            // Snake Head (Circle + Eyes at Start)
+            const headGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            // Rotate head to face direction of first curve part approx
+            // Vector to CP1
+            const hdx = cp1x - start.x;
+            const hdy = cp1y - start.y;
+            const angle = Math.atan2(hdy, hdx) * 180 / Math.PI;
+
+            headGroup.setAttribute('transform', `translate(${start.x}, ${start.y}) rotate(${angle})`);
+
+            const head = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+            head.setAttribute('cx', 0);
+            head.setAttribute('cy', 0);
+            head.setAttribute('rx', 8);
+            head.setAttribute('ry', 6);
+            head.setAttribute('fill', '#c0392b');
+            headGroup.appendChild(head);
+
+            // Eyes
+            const eye1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            eye1.setAttribute('cx', 3);
+            eye1.setAttribute('cy', -3);
+            eye1.setAttribute('r', 2);
+            eye1.setAttribute('fill', 'yellow');
+            headGroup.appendChild(eye1);
+
+            const eye2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            eye2.setAttribute('cx', 3);
+            eye2.setAttribute('cy', 3);
+            eye2.setAttribute('r', 2);
+            eye2.setAttribute('fill', 'yellow');
+            headGroup.appendChild(eye2);
+
+            group.appendChild(headGroup);
+            svg.appendChild(group);
+        }
+
+        // Handle Window Resize to redraw lines
+        window.addEventListener('resize', () => {
+            drawConnectors();
+            updatePlayerPosition(position, false);
+        });
+
+        // --- Gameplay ---
+        function updatePlayerPosition(pos, animate = true) {
+            const coords = getCellCenter(pos);
+            const player = document.getElementById('player');
+            const cellSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell-size')) || 50;
+
+            // Centering adjustment (player is 30px, cell is ~50px)
+            // getCellCenter returns center, so we need left/top of player to be center - playerSize/2
+            // But we are setting 'top'/'left' on absolute player inside relative container.
+            // player size is fixed 30px.
+
+            player.style.left = (coords.x - 15) + 'px';
+            player.style.top = (coords.y - 15) + 'px';
+
+            if (animate) {
+                player.animate([
+                    { transform: 'scale(1.2)' },
+                    { transform: 'scale(1)' }
+                ], { duration: 300 });
+            }
+        }
+
+        window.rollDice = function () { // Expose to window for HTML onclick
+            if (isRolling) return;
+            isRolling = true;
+            document.getElementById('rollBtn').disabled = true;
+
+            const diceSound = new Audio('https://actions.google.com/sounds/v1/cartoon/pop.ogg'); // Simple pop for roll
+            diceSound.play().catch(e => console.log(e)); // Ignore autoplay errors
+
+            // Animation of dice
+            let i = 0;
+            const interval = setInterval(() => {
+                const val = Math.floor(Math.random() * 6) + 1;
+                document.getElementById('diceShow').innerText = "🎲 " + val;
+                i++;
+                if (i > 10) {
+                    clearInterval(interval);
+                    showQuestion(val);
+                }
+            }, 100);
+        }
+
+        function showQuestion(diceVal) {
+            const q = questions[Math.floor(Math.random() * questions.length)];
+            currentQ = { ...q, diceVal: diceVal }; // Store dice val with question
+
+            const modal = document.getElementById('questionModal');
+            const qText = document.getElementById('qText');
+            const qImg = document.getElementById('qImage');
+            const optionsDiv = document.getElementById('options');
+            const timerDisplay = document.getElementById('timer');
+
+            qText.innerText = q.q;
+
+            // Image handling
+            if (q.img) {
+                qImg.src = q.img;
+                qImg.style.display = 'block';
+            } else {
+                qImg.style.display = 'none';
+                qImg.src = '';
+            }
+
+            optionsDiv.innerHTML = '';
+            ['A', 'B', 'C', 'D'].forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = q[opt];
+                btn.onclick = () => answerQuestion(opt);
+                optionsDiv.appendChild(btn);
+            });
+
+            modal.style.display = 'flex';
+
+            // Timer
+            timeLeft = 15;
+            timerDisplay.innerText = timeLeft;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                timerDisplay.innerText = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    answerQuestion(null); // Timeout
+                }
+            }, 1000);
+        }
+
+        function answerQuestion(selected) {
+            clearInterval(timerInterval);
+            document.getElementById('questionModal').style.display = 'none';
+            const status = document.getElementById('status');
+            const tipBox = document.getElementById('tipBox');
+
+            let move = 0;
+
+            if (selected === currentQ.a) {
+                // Correct
+                const correctAudio = document.getElementById('correctSound');
+                if (correctAudio && correctAudio.canPlayType) {
+                    const canPlay = correctAudio.canPlayType('audio/ogg') || correctAudio.canPlayType('audio/mpeg');
+                    if (canPlay) correctAudio.play().catch(()=>{});
+                }
+                move = currentQ.diceVal;
+                status.innerText = `Correct! Moving ${move} steps.`;
+                tipBox.innerText = "Nice Job! 🫀";
+                tipBox.style.color = "green";
+                movePlayer(move);
+            } else {
+                // Wrong
+                const wrongAudio = document.getElementById('wrongSound');
+                if (wrongAudio && wrongAudio.canPlayType) {
+                    const canPlay = wrongAudio.canPlayType('audio/ogg') || wrongAudio.canPlayType('audio/mpeg');
+                    if (canPlay) wrongAudio.play().catch(()=>{});
+                }
+                move = -3; // Penalty
+                status.innerText = `Wrong! Back 3 steps.`;
+                tipBox.innerText = `Correct answer was ${currentQ.a}: ${currentQ[currentQ.a]}`;
+                tipBox.style.color = "red";
+                movePlayer(move);
+            }
+        }
+
+        function movePlayer(steps) {
+            let newPos = position + steps;
+            if (newPos < 1) newPos = 1;
+            if (newPos > 100) newPos = 100;
+
+            position = newPos;
+            updatePlayerPosition(position);
+
+            // Check for Snake/Ladder after a short delay
+            setTimeout(() => {
+                checkBoardFeatures();
+            }, 600);
+        }
+
+        function checkBoardFeatures() {
+            if (jumps[position]) {
+                const dest = jumps[position];
+                const isLadder = dest > position;
+
+                if (isLadder) {
+                    document.getElementById('slideSound').play(); // Use slide sound for ladder up too? Or just generic
+                    document.getElementById('status').innerText = "LADDER! Climbing up...";
+                } else {
+                    document.getElementById('slideSound').play();
+                    document.getElementById('status').innerText = "SNAKE! Sliding down...";
+                }
+
+                position = dest;
+                updatePlayerPosition(position);
+            }
+
+            // Check Win
+            if (position === 100) {
+                setTimeout(() => {
+                    document.getElementById('winSound').play();
+                    document.body.innerHTML = `
+                <div class="modal-overlay" style="display:flex;">
+                    <div class="modal">
+                        <h1>🏆 ECG MASTER! 🏆</h1>
+                        <p>You conquered the rhythms!</p>
+                        <button class="btn-primary" onclick="location.reload()">Play Again</button>
+                    </div>
+                </div>
+            `;
+                    // Trigger confetti if we had a library, but sticking to prompt scope.
+                }, 500);
+            }
+
+            isRolling = false;
+            document.getElementById('rollBtn').disabled = false;
+        }
+
+        // Start
+        init();
+
+    </script>
+</body>
+
+
+</html>
+
+
